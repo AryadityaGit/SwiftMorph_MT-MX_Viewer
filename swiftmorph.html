@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SwiftMorph: MX ↔ MT Viewer</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
+    h1, h2 { color: #333; }
+    textarea, input[type="file"] { width: 100%; margin: 10px 0; }
+    #output { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; background: #fff; padding: 10px; border: 1px solid #ccc; }
+    .cell { padding: 8px; border: 1px solid #ddd; background: #fafafa; }
+    button { margin: 10px 5px; padding: 8px 12px; }
+    table { background: #fff; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; }
+  </style>
+</head>
+<body>
+  <h1>SwiftMorph: MX ↔ MT Viewer</h1>
+
+  <label>Upload File (XML, TXT, CSV, HTML):</label>
+  <input type="file" id="fileInput" accept=".xml,.txt,.csv,.html" />
+
+  <label>Or Paste Message:</label>
+  <textarea id="xmlInput" rows="10" placeholder="Paste MX XML or MT text here..."></textarea>
+
+  <button onclick="convertToMT()">Convert to MT View</button>
+  <button onclick="exportTXT()">Export as TXT</button>
+  <label><input type="checkbox" id="reverseToggle" onchange="toggleReverse()"> Reverse View (MT → MX)</label>
+
+  <h2>MT-style Output</h2>
+  <div id="output"></div>
+
+  <h2>MX ↔ MT Mapping Reference</h2>
+  <table>
+    <tr><th>MX Field (pacs.008)</th><th>MT103 Tag</th><th>Description</th></tr>
+    <tr><td>InstdAmt</td><td>:32A:</td><td>Amount and currency</td></tr>
+    <tr><td>Dbtr/Nm</td><td>:50K:</td><td>Ordering customer</td></tr>
+    <tr><td>Cdtr/Nm</td><td>:59:</td><td>Beneficiary</td></tr>
+    <tr><td>EndToEndId</td><td>:20:</td><td>Transaction reference</td></tr>
+    <tr><td>InstrId</td><td>:21:</td><td>Instruction ID</td></tr>
+    <tr><td>MsgId</td><td>:23B:</td><td>Message ID</td></tr>
+  </table>
+
+  <script>
+    const mapping = {
+      'InstdAmt': ':32A:',
+      'Dbtr/Nm': ':50K:',
+      'Cdtr/Nm': ':59:',
+      'EndToEndId': ':20:',
+      'InstrId': ':21:',
+      'MsgId': ':23B:'
+    };
+
+    const reverseMapping = Object.fromEntries(Object.entries(mapping).map(([k, v]) => [v, k]));
+
+    function parseXML(xmlStr) {
+      const parser = new DOMParser();
+      return parser.parseFromString(xmlStr, "text/xml");
+    }
+
+    function extractValue(xml, path) {
+      const parts = path.split('/');
+      let node = xml;
+      for (let part of parts) {
+        node = node.getElementsByTagName(part)[0];
+        if (!node) return '';
+      }
+      return node.textContent || '';
+    }
+
+    function convertToMT() {
+      const input = document.getElementById('xmlInput').value;
+      const reverse = document.getElementById('reverseToggle').checked;
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      if (reverse) {
+        const lines = input.split('\n');
+        lines.forEach(line => {
+          const [tag, ...rest] = line.trim().split(' ');
+          const value = rest.join(' ');
+          const xmlPath = reverseMapping[tag];
+          if (xmlPath) {
+            output.innerHTML += `<div class="cell">${xmlPath}</div><div class="cell">${value}</div>`;
+          }
+        });
+      } else {
+        const xml = parseXML(input);
+        Object.entries(mapping).forEach(([xmlPath, mtTag]) => {
+          const value = extractValue(xml, xmlPath);
+          if (value) {
+            output.innerHTML += `<div class="cell">${mtTag}</div><div class="cell">${value}</div>`;
+          }
+        });
+      }
+    }
+
+    function exportTXT() {
+      const cells = document.querySelectorAll('#output .cell');
+      let txt = '';
+      for (let i = 0; i < cells.length; i += 2) {
+        txt += `${cells[i].textContent} ${cells[i+1].textContent}\n`;
+      }
+      const blob = new Blob([txt], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'mt_output.txt';
+      link.click();
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function () {
+      const reader = new FileReader();
+      reader.onload = function () {
+        document.getElementById('xmlInput').value = reader.result;
+      };
+      reader.readAsText(this.files[0]);
+    });
+
+    function toggleReverse() {
+      convertToMT();
+    }
+  </script>
+</body>
+</html>

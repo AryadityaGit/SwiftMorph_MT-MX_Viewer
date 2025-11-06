@@ -58,12 +58,13 @@
       return parser.parseFromString(xmlStr, "text/xml");
     }
 
-    function extractValue(xml, path) {
+    function extractValue(xml, path, ns) {
       const parts = path.split('/');
       let node = xml;
       for (let part of parts) {
-        node = node.getElementsByTagName(part)[0];
-        if (!node) return '';
+        const children = node.getElementsByTagNameNS(ns, part);
+        if (!children || children.length === 0) return '';
+        node = children[0];
       }
       return node.textContent || '';
     }
@@ -86,8 +87,9 @@
         });
       } else {
         const xml = parseXML(input);
+        const ns = xml.documentElement.namespaceURI;
         Object.entries(mapping).forEach(([xmlPath, mtTag]) => {
-          const value = extractValue(xml, xmlPath);
+          const value = extractValue(xml, xmlPath, ns);
           if (value) {
             output.innerHTML += `<div class="cell">${mtTag}</div><div class="cell">${value}</div>`;
           }
@@ -97,6 +99,10 @@
 
     function exportTXT() {
       const cells = document.querySelectorAll('#output .cell');
+      if (cells.length === 0) {
+        alert("No output to export. Please convert a message first.");
+        return;
+      }
       let txt = '';
       for (let i = 0; i < cells.length; i += 2) {
         txt += `${cells[i].textContent} ${cells[i+1].textContent}\n`;
